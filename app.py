@@ -269,6 +269,3 @@ if not df.empty:
 
 else:
     st.info("Kansiossa 'data/' ei ole vielä GPX-tiedostoja tai lataus on kesken.")
-
-else:
-    st.info("Kansiossa 'data/' ei ole vielä GPX-tiedostoja tai lataus on kesken.")
