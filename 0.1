@@ -1,0 +1,61 @@
+import streamlit as st
+import gpxpy
+import pandas as pd
+import plotly.express as px
+from datetime import datetime
+
+st.set_page_config(page_title="Marathon Dashboard", page_icon="🏃", layout="wide")
+
+st.title("🏃‍♂️ Tiimin Maraton Dashboard 2027")
+st.markdown("Valmistautuminen kohti maratonia!")
+
+# Sivupalkki tiedostojen lataukselle
+st.sidebar.header("Treenitiedostot")
+uploaded_files = st.sidebar.file_uploader("Lataa GPX-tiedostoja", type=["gpx"], accept_multiple_files=True)
+
+runner_name = st.sidebar.text_input("Juoksijan nimi", value="Antti")
+
+workouts = []
+
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        try:
+            gpx = gpxpy.parse(uploaded_file)
+            for track in gpx.tracks:
+                for segment in track.segments:
+                    points = segment.points
+                    if points:
+                        start_time = points[0].time
+                        length_m = gpx.length_2d()
+                        distance_km = round(length_m / 1000.0, 2)
+                        duration_sec = gpx.get_duration() or 1
+                        duration_min = round(duration_sec / 60.0, 1)
+                        avg_speed = round((distance_km / (duration_sec / 3600.0)), 1) if duration_sec > 0 else 0
+                        
+                        workouts.append({
+                            "Juoksija": runner_name,
+                            "Päivämäärä": start_time.strftime("%Y-%m-%d") if start_time else "Tuntematon",
+                            "Matka (km)": distance_km,
+                            "Kesto (min)": duration_min,
+                            "Keskinopeus (km/h)": avg_speed
+                        })
+        except Exception as e:
+            st.sidebar.error(f"Virhe tiedostossa {uploaded_file.name}: {e}")
+
+if workouts:
+    df = pd.DataFrame(workouts)
+    
+    # Tunnettuja mittareita
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Yhteensä juostu", f"{df['Matka (km)'].sum():.1f} km")
+    col2.metric("Treenien määrä", f"{len(df)} kpl")
+    col3.metric("Pisimmäin lenkki", f"{df['Matka (km)'].max():.1f} km")
+    
+    st.subheader("📊 Treenit")
+    st.dataframe(df, use_container_width=True)
+    
+    st.subheader("📈 Kilometrien kehitys")
+    fig = px.bar(df, x="Päivämäärä", y="Matka (km)", color="Juoksija", title="Juostut kilometrit päivittäin")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("👋 Tervetuloa! Lataa vasemmalta sivupalkista GPX-tiedosto, niin näet treenisi tilastot täällä.")
