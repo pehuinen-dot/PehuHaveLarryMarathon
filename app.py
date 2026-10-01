@@ -32,8 +32,15 @@ juoksijan_nimi = st.sidebar.text_input("Urheilijan nimi", "Antti")
 @st.cache_data
 def load_all_gpx(folder_path="data"):
     records = []
-    gpx_files = glob.glob(os.path.join(folder_path, "*.gpx")) + glob.glob(os.path.join(folder_path, "*.GPX"))
     
+    # Etsitään kaikki GPX- ja XML-tiedostot myös kaikista data/-kansion alakansioista
+    gpx_files = []
+    for ext in ('*.gpx', '*.GPX', '*.xml', '*.XML'):
+        gpx_files.extend(glob.glob(os.path.join(folder_path, "**", ext), recursive=True))
+    
+    # Poistetaan mahdolliset tuplat
+    gpx_files = list(set(gpx_files))
+
     for filepath in gpx_files:
         try:
             with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -44,8 +51,8 @@ def load_all_gpx(folder_path="data"):
                 for segment in track.segments:
                     for point in segment.points:
                         hr = None
-                        for ext in point.extensions:
-                            for child in ext:
+                        for ext_elem in point.extensions:
+                            for child in ext_elem:
                                 if child.tag.endswith('hr'):
                                     hr = int(child.text)
                         
@@ -56,20 +63,35 @@ def load_all_gpx(folder_path="data"):
                         })
             
             df_points = pd.DataFrame(data)
+            
+            # Jos tiedostossa ei ole reittipisteitä (esim. pelkkä paikallaan pysytty treeni ilman GPS-jälkeä)
             if df_points.empty:
+                # Luodaan merkintä tiedostonnimestä jos gpx.time on saatavilla
+                fname = os.path.basename(filepath)
+                records.append({
+                    'Tiedosto': fname,
+                    'Urheilija': juoksijan_nimi,
+                    'Päivämäärä': None,
+                    'Vuosi': 2026,
+                    'Laji': 'Muu laji (ei GPS)',
+                    'Matka (km)': 0.0,
+                    'Kesto (min)': 0.0,
+                    'Keskinopeus (km/h)': 0.0,
+                    'Keskisyke': None,
+                    'Maksimisyke': None,
+                    'Kalorit (kcal)': 0
+                })
                 continue
                 
             fname = os.path.basename(filepath).lower()
             track_name = gpx.tracks[0].name.lower() if gpx.tracks and gpx.tracks[0].name else ""
             
-            # Poimitaan myös GPX type -tagi jos kello on tallentanut sen
             gpx_type = ""
             if gpx.tracks and hasattr(gpx.tracks[0], 'type') and gpx.tracks[0].type:
                 gpx_type = str(gpx.tracks[0].type).lower()
 
             full_text = f"{fname} {track_name} {gpx_type}"
             
-            # Laajennettu lajitunnistus
             if any(w in full_text for w in ['hockey', 'jaakiekko', 'jääkiekko', 'ice_hockey', 'kiekko']):
                 laji = 'Jääkiekko'
             elif any(w in full_text for w in ['ski', 'hiihto', 'xc_skiing', 'crosscountry']):
@@ -100,7 +122,6 @@ def load_all_gpx(folder_path="data"):
             avg_hr = df_points['hr'].mean() if 'hr' in df_points and df_points['hr'].notnull().any() else None
             max_hr = df_points['hr'].max() if 'hr' in df_points and df_points['hr'].notnull().any() else None
 
-            # Kalorilaskenta
             calories = None
             if avg_hr and duration_min > 0:
                 cal_per_min = (-55.0969 + (36 * 0.2017) - (88 * 0.09036) + (avg_hr * 0.6309)) / 4.184
@@ -124,7 +145,7 @@ def load_all_gpx(folder_path="data"):
                 'Maksimisyke': round(max_hr, 0) if max_hr else None,
                 'Kalorit (kcal)': calories
             })
-        except Exception as e:
+        except Exception:
             continue
             
     return pd.DataFrame(records)
@@ -137,7 +158,7 @@ if not df.empty:
     st.subheader("📊 Harjoitusten Yhteenveto & Maksimit")
     
     col_tot1, col_tot2, col_tot3, col_tot4 = st.columns(4)
-    col_tot1.metric("Treenit yhteensä", f"{len(df)} kpl")
+    col_tot1.metric("Treenit yhteensä (löydetyt tiedostot)", f"{len(df)} kpl")
     col_tot2.metric("Aikaa urheiltu", f"{round(df['Kesto (min)'].sum() / 60, 1)} h")
     col_tot3.metric("Kokonaiskilometrit", f"{round(df['Matka (km)'].sum(), 1)} km")
     
