@@ -2,7 +2,6 @@ import streamlit as st
 import gpxpy
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import os
 import glob
 
@@ -13,18 +12,24 @@ st.set_page_config(
 )
 
 st.title("🏆 PehuHaveLarry Multi-Sport Dashboard")
-st.write("Harjoitukset, VO2 Max -kehitys ja Helsinki–Budapest -haaste!")
+st.write("Kaikki harjoitukset, lajikohtaiset kortit, VO2 Max ja Helsinki–Budapest -haaste!")
 
 SPORT_ICONS = {
-    'Jääkiekko': '🏒',
-    'Juoksu': '🏃',
-    'Kävely': '🚶',
-    'Pyöräily': '🚴',
-    'Hiihto': '🎿',
-    'Padel': '🎾',
     'Golf': '⛳',
-    'Kuntosali / Voimailu': '🏋️',
-    'Uinti': '🏊',
+    'Luistelu': '⛸️',
+    'Kävely': '🚶',
+    'Kuntosali': '🏋️',
+    'Jääkiekko': '🏒',
+    'Maastohiihto': '🎿',
+    'Padel': '🎾',
+    'Juoksu': '🏃',
+    'Pyöräily': '🚴',
+    'Lumilautailu': '🏂',
+    'Kuntopiiriharjoittelu': '🤸',
+    'Kuntopyörä': '🚴‍♂️',
+    'Juoksumatto': '🏃‍♂️',
+    'Soutu': '🚣',
+    'Crosstraining': '💪',
     'Muu laji': '🎯'
 }
 
@@ -45,10 +50,48 @@ def load_all_gpx(folder_path="data"):
             with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                 gpx = gpxpy.parse(f)
                 
+            fname = os.path.basename(filepath).lower()
+            track_name = gpx.tracks[0].name.lower() if gpx.tracks and gpx.tracks[0].name else ""
+            gpx_type = str(gpx.tracks[0].type).lower() if (gpx.tracks and hasattr(gpx.tracks[0], 'type') and gpx.tracks[0].type) else ""
+            full_text = f"{fname} {track_name} {gpx_type}"
+
+            # Tarkennettu lajitunnistus pyydetyn listan mukaan
+            if any(w in full_text for w in ['treadmill', 'juoksumatto']):
+                laji = 'Juoksumatto'
+            elif any(w in full_text for w in ['indoor_cycling', 'stationary_bike', 'kuntopyora', 'kuntopyörä', 'spinning']):
+                laji = 'Kuntopyörä'
+            elif any(w in full_text for w in ['rowing', 'row', 'soutu', 'soutulaite']):
+                laji = 'Soutu'
+            elif any(w in full_text for w in ['crosstraining', 'cross_training', 'crossfit', 'elliptical', 'crosstrainer']):
+                laji = 'Crosstraining'
+            elif any(w in full_text for w in ['circuit', 'kuntopiiri', 'kuntopiiriharjoittelu']):
+                laji = 'Kuntopiiriharjoittelu'
+            elif any(w in full_text for w in ['snowboarding', 'snowboard', 'lumilautailu', 'lauta']):
+                laji = 'Lumilautailu'
+            elif any(w in full_text for w in ['golf']):
+                laji = 'Golf'
+            elif any(w in full_text for w in ['skating', 'luistelu', 'ice_skating', 'skate']):
+                laji = 'Luistelu'
+            elif any(w in full_text for w in ['hockey', 'jaakiekko', 'jääkiekko', 'ice_hockey', 'kiekko']):
+                laji = 'Jääkiekko'
+            elif any(w in full_text for w in ['ski', 'hiihto', 'xc_skiing', 'crosscountry', 'maastohiihto']):
+                laji = 'Maastohiihto'
+            elif any(w in full_text for w in ['padel', 'tennis', 'racket', 'squash']):
+                laji = 'Padel'
+            elif any(w in full_text for w in ['gym', 'sali', 'kuntosali', 'weight', 'strength', 'voimailu', 'fitness']):
+                laji = 'Kuntosali'
+            elif any(w in full_text for w in ['cycling', 'bike', 'pyoraily', 'pyöräily', 'biking']):
+                laji = 'Pyöräily'
+            elif any(w in full_text for w in ['running', 'run', 'juoksu']):
+                laji = 'Juoksu'
+            elif any(w in full_text for w in ['walking', 'walk', 'kavely', 'kävely', 'hiking']):
+                laji = 'Kävely'
+            else:
+                laji = 'Muu laji'
+
             data = []
             vo2max_val = None
             
-            # Etsitään VO2Max -arvoa GPX-laajennuksista
             for track in gpx.tracks:
                 for segment in track.segments:
                     for point in segment.points:
@@ -70,58 +113,35 @@ def load_all_gpx(folder_path="data"):
                         })
             
             df_points = pd.DataFrame(data)
-            fname = os.path.basename(filepath).lower()
-            track_name = gpx.tracks[0].name.lower() if gpx.tracks and gpx.tracks[0].name else ""
-            gpx_type = str(gpx.tracks[0].type).lower() if (gpx.tracks and hasattr(gpx.tracks[0], 'type') and gpx.tracks[0].type) else ""
-            full_text = f"{fname} {track_name} {gpx_type}"
 
-            # Lajin tunnistus
-            if any(w in full_text for w in ['hockey', 'jaakiekko', 'jääkiekko', 'ice_hockey', 'kiekko']):
-                laji = 'Jääkiekko'
-            elif any(w in full_text for w in ['ski', 'hiihto', 'xc_skiing', 'crosscountry']):
-                laji = 'Hiihto'
-            elif any(w in full_text for w in ['golf']):
-                laji = 'Golf'
-            elif any(w in full_text for w in ['padel', 'tennis', 'racket', 'squash']):
-                laji = 'Padel'
-            elif any(w in full_text for w in ['cycling', 'bike', 'pyoraily', 'pyöräily', 'biking']):
-                laji = 'Pyöräily'
-            elif any(w in full_text for w in ['gym', 'sali', 'weight', 'strength', 'voimailu', 'fitness']):
-                laji = 'Kuntosali / Voimailu'
-            elif any(w in full_text for w in ['swim', 'uinti']):
-                laji = 'Uinti'
-            elif any(w in full_text for w in ['running', 'run', 'juoksu']):
-                laji = 'Juoksu'
-            elif any(w in full_text for w in ['walking', 'walk', 'kavely', 'kävely', 'hiking']):
-                laji = 'Kävely'
-            else:
-                laji = 'Muu laji'
-
-            # Käsittely jos GPS-pisteitä ei ole (manuaalisesti lisätyt / 0 min treenit)
-            if df_points.empty or df_points['time'].isnull().all():
-                start_time = gpx.time if gpx.time else None
-                dist_km = gpx.length_2d() / 1000.0 if gpx.length_2d() else 0.0
-                duration_min = 0.0
-                avg_hr = None
-                max_hr = None
-            else:
-                dist_km = gpx.length_2d() / 1000.0
+            dist_km = gpx.length_2d() / 1000.0 if gpx.length_2d() else 0.0
+            
+            if not df_points.empty and df_points['time'].notnull().any():
                 start_time = df_points['time'].min()
                 end_time = df_points['time'].max()
                 duration_min = (end_time - start_time).total_seconds() / 60.0 if start_time and end_time else 0.0
                 avg_hr = df_points['hr'].mean() if 'hr' in df_points and df_points['hr'].notnull().any() else None
                 max_hr = df_points['hr'].max() if 'hr' in df_points and df_points['hr'].notnull().any() else None
+            else:
+                start_time = gpx.time if gpx.time else None
+                duration_min = 0.0
+                avg_hr = None
+                max_hr = None
 
             speed_kmh = (dist_km / (duration_min / 60.0)) if duration_min > 0 else 0.0
 
-            # Kalorit
             calories = None
             if avg_hr and duration_min > 0:
                 cal_per_min = (-55.0969 + (36 * 0.2017) - (88 * 0.09036) + (avg_hr * 0.6309)) / 4.184
                 if cal_per_min > 0:
                     calories = round(cal_per_min * duration_min, 0)
             elif duration_min > 0:
-                met_values = {'Juoksu': 10, 'Jääkiekko': 9, 'Pyöräily': 8, 'Kävely': 4, 'Hiihto': 9, 'Padel': 7, 'Golf': 4, 'Kuntosali / Voimailu': 5}
+                met_values = {
+                    'Juoksu': 10, 'Juoksumatto': 10, 'Jääkiekko': 9, 'Luistelu': 8, 
+                    'Maastohiihto': 9, 'Pyöräily': 8, 'Kuntopyörä': 7, 'Kävely': 4, 
+                    'Padel': 7, 'Golf': 4, 'Kuntosali': 5, 'Kuntopiiriharjoittelu': 6, 
+                    'Soutu': 7, 'Crosstraining': 8, 'Lumilautailu': 6
+                }
                 met = met_values.get(laji, 5)
                 calories = round((met * 3.5 * 88 / 200) * duration_min, 0)
             else:
@@ -164,25 +184,22 @@ if not df.empty:
 
     st.write("---")
     
-    # --- 1. HELSINKI - BUDAPEST HAASTE ---
+    # --- HELSINKI - BUDAPEST HAASTE ---
     st.subheader("🗺️ Helsinki ➔ Budapest Juoksu & Kävelyhaaste")
     
-    # Etäisyys maitse Helsinki -> Budapest n. 2150 km
     TARGET_DIST_KM = 2150.0
-    
-    run_walk_df = df[df['Laji'].isin(['Juoksu', 'Kävely'])].copy()
+    run_walk_df = df[df['Laji'].isin(['Juoksu', 'Juoksumatto', 'Kävely'])].copy()
     current_dist = run_walk_df['Matka (km)'].sum()
     remaining_dist = max(0.0, TARGET_DIST_KM - current_dist)
     progress_pct = min(100.0, (current_dist / TARGET_DIST_KM) * 100)
     
     col_h1, col_h2, col_h3 = st.columns(3)
-    col_h1.metric("Kuljettu matka (Juoksu & Kävely)", f"{round(current_dist, 1)} km")
-    col_h2.metric("Matkaa jäljellä Budapestziin", f"{round(remaining_dist, 1)} km")
+    col_h1.metric("Kuljettu matka (Juoksu, Juoksumatto & Kävely)", f"{round(current_dist, 1)} km")
+    col_h2.metric("Matkaa jäljellä Budapestiin", f"{round(remaining_dist, 1)} km")
     col_h3.metric("Urakasta suoritettu", f"{round(progress_pct, 1)} %")
     
     st.progress(progress_pct / 100)
 
-    # Kumulatiivinen matkakuvaaja
     if not run_walk_df.empty:
         run_walk_sorted = run_walk_df.dropna(subset=['Päivämäärä']).sort_values('Päivämäärä')
         run_walk_sorted['Kertymä (km)'] = run_walk_sorted['Matka (km)'].cumsum()
@@ -200,7 +217,7 @@ if not df.empty:
 
     st.write("---")
 
-    # --- 2. VO2 MAX KEHITYS ---
+    # --- VO2 MAX KEHITYS ---
     st.subheader("🫁 VO2 Max -Kuntoindeksin Kehitys")
     df_vo2 = df.dropna(subset=['VO2Max']).sort_values('Päivämäärä')
     
@@ -216,11 +233,11 @@ if not df.empty:
         fig_vo2.update_layout(template="plotly_white", yaxis_title="VO2 Max (ml/kg/min)")
         st.plotly_chart(fig_vo2, use_container_width=True)
     else:
-        st.info("💡 GPX-tiedostoista ei löytynyt suoraa VO2Max-kenttää. Jos sovelluksesi tallentaa sen eri muotoon, se tulee näkyviin kun lisäämme uusia tiedostoja.")
+        st.info("💡 Sykekello/Sports Tracker ei ole tallentanut VO2Max-arvoa suoraan GPX-laajennukseen.")
 
     st.write("---")
     
-    # --- 3. LAJIKORTIT ---
+    # --- LAJIKORTIT ---
     st.subheader("🔥 Lajikohtaiset kortit ja maksimitulokset")
     
     unique_sports = df['Laji'].unique()
@@ -249,6 +266,9 @@ if not df.empty:
     st.write("---")
     st.subheader("📋 Kaikki treenit listattuna")
     st.dataframe(df.sort_values("Päivämäärä", ascending=False), use_container_width=True)
+
+else:
+    st.info("Kansiossa 'data/' ei ole vielä GPX-tiedostoja tai lataus on kesken.")
 
 else:
     st.info("Kansiossa 'data/' ei ole vielä GPX-tiedostoja tai lataus on kesken.")
